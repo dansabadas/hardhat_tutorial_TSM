@@ -1,4 +1,5 @@
 const { expect, assert } = require("chai");
+const { BigNumber } = require("ethers");
 const { ethers } = require("hardhat");
 
 describe("Create Stream", () => {
@@ -20,7 +21,7 @@ describe("Create Stream", () => {
         await streamingContract.deployed();
 
         const delay = 100;
-        const duration = 100;
+        const duration = 101;
 
         now = (await ethers.provider.getBlock()).timestamp;
         startTimestamp = now + delay;
@@ -48,6 +49,56 @@ describe("Create Stream", () => {
                     { value: deposit }
                 )
             ).to.be.revertedWith("Stream to the caller");
+        });
+    });
+
+    describe("#success", function () {
+        it("should increase the id counter", async function () {
+            let streamIdCounter = await streamingContract.streamIdCounter();
+            expect(streamIdCounter).to.be.equal(0);
+
+            expect(
+                await streamingContract.connect(sender).createStream(
+                    recipient.address,
+                    startTimestamp,
+                    stopTimestamp,
+                    { value: deposit })
+            ).to.not.throw;
+
+            streamIdCounter = await streamingContract.streamIdCounter();
+            expect(streamIdCounter).to.be.equal(1);
+        });
+
+        it("should emit CreateStream event", async function () {
+            await expect(
+                streamingContract.connect(sender).createStream(
+                    recipient.address,
+                    startTimestamp,
+                    stopTimestamp,
+                    { value: deposit })
+            ).to.emit(streamingContract, "CreateStream")
+                .withArgs(
+                    1,
+                    sender.address,
+                    recipient.address
+                );
+        });
+
+        it("should increase the contract balance by deposit amount", async function () {
+            let balance = await ethers.provider.getBalance(streamingContract.address);
+            expect(balance).to.be.equal(0);
+
+            expect(
+                await streamingContract.connect(sender).createStream(
+                    recipient.address,
+                    startTimestamp,
+                    stopTimestamp,
+                    { value: deposit })
+            ).to.not.throw;
+
+            balance = await ethers.provider.getBalance(streamingContract.address);
+            let remainder = deposit.mod(stopTimestamp - startTimestamp);
+            expect(balance).to.be.equal(deposit.sub(remainder));
         });
     });
 });
