@@ -69,40 +69,72 @@ contract WorkContract {
     }
 
     function balanceOf(uint32 _streamId, address _who)
-        external view returns (uint256)
+        public view returns (uint256)
     {
-        Stream memory l_stream_ = streams[_streamId];
+        Stream memory l_stream = streams[_streamId];
         uint256 l_elapsedTime;
 
-        if (block.timestamp > l_stream_.startTime) {
-            l_elapsedTime = l_stream_.stopTime;
-            if (block.timestamp < l_stream_.stopTime) {
+        if (block.timestamp > l_stream.startTime) {
+            l_elapsedTime = l_stream.stopTime;
+            if (block.timestamp < l_stream.stopTime) {
                  l_elapsedTime = uint32(block.timestamp);
             }
 
             unchecked {
-                l_elapsedTime -= l_stream_.startTime;
+                l_elapsedTime -= l_stream.startTime;
             }
         }
 
         uint256 l_amountWithdrawn;
         unchecked {
-            l_amountWithdrawn = l_stream_.deposit - l_stream_.balance;
+            l_amountWithdrawn = l_stream.deposit - l_stream.balance;
         }
 
         uint256 l_due;
         unchecked {
-            l_due = l_elapsedTime * l_stream_.rate - l_amountWithdrawn;
+            l_due = l_elapsedTime * l_stream.rate - l_amountWithdrawn;
         }
 
-        if (_who == l_stream_.recipient) return l_due;
+        if (_who == l_stream.recipient) return l_due;
 
-        if (_who == l_stream_.sender) {
+        if (_who == l_stream.sender) {
             unchecked {
-                return l_stream_.balance - l_due;
+                return l_stream.balance - l_due;
             }
         }
 
         return 0;
+    }
+
+    event WithdrawFromStream(
+        uint32  indexed _streamId,
+        address indexed _sender,
+        address indexed _recipient
+    );
+    function withdrawFromStream(uint32 _streamId) external
+    {
+        Stream memory l_stream = streams[_streamId];
+
+        require(
+            l_stream.recipient != address(0) && l_stream.sender != address(0),
+           "Stream does not exist"
+        );
+
+        require(
+            msg.sender == l_stream.recipient,
+           "Caller is not the recipient of the stream"
+        );
+
+        uint256 balance_ = balanceOf(_streamId, l_stream.recipient);
+
+        require(balance_ > 0, "Available balance is 0");
+
+        unchecked { l_stream.balance -= balance_; }
+
+        streams[_streamId] = l_stream;
+
+        emit WithdrawFromStream(_streamId, l_stream.sender, l_stream.recipient);
+        (bool success,) = l_stream.recipient.call{value: balance_}("");
+        if (!success) revert("Funds transfer reverted");
     }
 }
