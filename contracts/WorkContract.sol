@@ -137,4 +137,37 @@ contract WorkContract {
         (bool success,) = l_stream.recipient.call{value: balance_}("");
         if (!success) revert("Funds transfer reverted");
     }
+
+    event CancelStream(
+        uint32  indexed _streamId,
+        address indexed _sender,
+        address indexed _recipient);
+    function cancelStream(uint32 _streamId) external
+    {
+        Stream memory l_stream = streams[_streamId];
+
+        require(
+            l_stream.recipient != address(0) && l_stream.sender != address(0),
+           "Stream does not exist"
+        );
+
+        require(
+            msg.sender == l_stream.recipient || msg.sender == l_stream.sender,
+           "Caller is not the sender or the recipient of the stream"
+        );
+
+        uint256 l_balance = balanceOf(_streamId, l_stream.recipient);
+
+        delete streams[_streamId];
+
+        emit CancelStream(_streamId, l_stream.sender, l_stream.recipient);
+
+        if (l_balance > 0) {
+            (bool success2,) = l_stream.recipient.call{value: l_balance}("");
+            if (!success2) revert("Funds transfer reverted");
+        }
+
+        (bool success,) = l_stream.sender.call{value: (l_stream.balance - l_balance)}("");
+        if (!success) revert("Funds transfer reverted");
+    }
 }
